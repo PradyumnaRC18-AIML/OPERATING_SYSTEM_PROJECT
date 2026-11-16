@@ -48,7 +48,17 @@ void initialize_TLB(void);
 unum lookup_TLB(unum VPN,int* not_found);
 PAGE_TABLE* get_PAGE_TABLE(unum PAGE_DIRECTORY_INDEX);
 void insert_TLB(unum VPN, unum PFN);
+double effective_access_time(int TLB_lookup_time, int memory_access_time, int page_fault_service_time);
 
+int get_int(string s) {
+    printf("%s",s);
+    int d;
+    if(scanf("%d",&d) != 1) {
+        printf("Invalid input. Please enter a valid integer.\n");
+        exit(1);
+    }
+    return d;
+}
 string get_string(string s) {
     const int START = 512;
     printf("%s",s);
@@ -77,6 +87,13 @@ int main(int argc, string argv[]) {
     int len = argc - 1;
     if(len == 0) {
         printf("Usage: ./main address.....");
+        return 1;
+    }
+    int TLB_lookup_time = get_int("Enter TLB lookup time (in ns): ");
+    int memory_access_time = get_int("Enter memory access time (in ns): ");
+    int page_fault_service_time = get_int("Enter page fault service time (in ms): ") * 1000000;
+    if(TLB_lookup_time <= 0 || memory_access_time <= 0 || page_fault_service_time <= 0) {
+        printf("All times must be positive integers.\n");
         return 1;
     }
     initialize_TLB();
@@ -149,7 +166,7 @@ int main(int argc, string argv[]) {
         printf("Page Faults           : %d\n", PAGE_FAULT_COUNT);
         printf("TLB Hit Rate          : %.2f%%\n", HIT_RATE);
         printf("TLB Miss Rate         : %.2f%%\n", MISS_RATE);
-
+        printf("Effective Access Time : %.2f ns\n", effective_access_time(TLB_lookup_time, memory_access_time, page_fault_service_time));
         printf("============================================\n");
     }
     return 0;
@@ -220,11 +237,11 @@ PAGE page_details(unum address) {
 }
 
 void initialize_TLB(void) {
+    REPLACEMENT_INDEX = 0;
     for(int i = 0; i < N; i++) {
         tlb[i].PHYSICAL_FRAME_NUMBER = 0;
         tlb[i].VIRTUAL_PAGE_NUMBER = 0;
         tlb[i].ValidBit = 0;
-        REPLACEMENT_INDEX = 0;
     }
 }
 
@@ -261,4 +278,19 @@ void insert_TLB(unum VPN, unum PFN) {
     tlb[REPLACEMENT_INDEX].PHYSICAL_FRAME_NUMBER = PFN;
     tlb[REPLACEMENT_INDEX].ValidBit = 1;
     REPLACEMENT_INDEX = (REPLACEMENT_INDEX+1)%N;
+}
+
+
+double effective_access_time(int TLB_lookup_time,int memory_access_time,int page_fault_service_time) {
+    int TOTAL = TLB_HIT + TLB_MISS;
+    if(TOTAL == 0) {
+        printf("Error: No memory accesses recorded.\n");
+        return 0.0;
+    }
+    if(PAGE_FAULT_COUNT > TLB_MISS) {
+        printf("Error: Invalid memory statistics.\n");
+        return 0.0;
+    }
+    double expression = (double)TLB_HIT * (TLB_lookup_time + memory_access_time) + (double)(TLB_MISS - PAGE_FAULT_COUNT) * (TLB_lookup_time + 3.0 * memory_access_time) + (double)PAGE_FAULT_COUNT * (TLB_lookup_time + 3.0 * memory_access_time + page_fault_service_time);
+    return expression / TOTAL;
 }
